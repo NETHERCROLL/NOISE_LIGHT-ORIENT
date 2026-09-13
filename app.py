@@ -88,7 +88,7 @@ for key, val in {
 # SIDEBAR REVISITÉ
 # ------------------------------------------------------------------------------
 st.sidebar.title("⚡ NOISE LIGHT Pro")
-st.sidebar.caption("Plateforme Global de Harvesting Piézoacoustique")
+st.sidebar.caption("Plateforme Globale de Harvesting Piézoacoustique")
 
 if st.session_state.field_mode_active:
     st.sidebar.error("🔴 MODE TERRAIN ACTIF (Données Réelles Insérées)")
@@ -195,11 +195,11 @@ kpi6.metric("Payback (ROI)", f"{roi_months:.1f} mois")
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
-# ONGLETS MULTI-FACETTES (INCLUANT LE NOUVEAU MODE TERRAIN)
+# ONGLETS MULTI-FACETTES
 # ------------------------------------------------------------------------------
 tab_field, tab_map, tab_3d, tab_fft, tab_mat, tab_pmic, tab_iot, tab_roi, tab_audit = st.tabs([
     "📱 MODE TERRAIN LIVE",
-    "🗺️ Carte Satellite HD", 
+    "🗺️ Carte Satellite Ultra-HD", 
     "📊 Surface 3D Dynamic", 
     "📈 Spectrogramme FFT", 
     "🧪 Matériaux & Fatigue",
@@ -210,7 +210,7 @@ tab_field, tab_map, tab_3d, tab_fft, tab_mat, tab_pmic, tab_iot, tab_roi, tab_au
 ])
 
 # ------------------------------------------------------------------------------
-# TAB 0 : MODE TERRAIN LIVE (NOUVEAU)
+# TAB 0 : MODE TERRAIN LIVE
 # ------------------------------------------------------------------------------
 with tab_field:
     st.subheader("📱 Acquisition Réelle Terrain (GPS, Microphone, Accéléromètre, Caméra)")
@@ -219,9 +219,8 @@ with tab_field:
     col_f1, col_f2 = st.columns([1, 1])
 
     with col_f1:
-        st.write("### 🎛️ Contrôle des Capteurs Materiels")
+        st.write("### 🎛️ Contrôle des Capteurs Matériels")
         
-        # Script HTML/JS d'acquisition WebRTC & HTML5 API
         sensor_html = """
         <div style="background:#f8f9fa; padding:15px; border-radius:8px; border:1px solid #ddd;">
             <button id="btn-start" style="background:#0d6efd; color:white; border:none; padding:10px 15px; border-radius:5px; cursor:pointer; font-weight:bold;">
@@ -241,14 +240,12 @@ with tab_field:
             document.getElementById('btn-start').addEventListener('click', async () => {
                 document.getElementById('status').innerText = "Statut : Capteurs Actifs 🟢";
                 
-                // 1. GPS
                 if (navigator.geolocation) {
                     navigator.geolocation.watchPosition((pos) => {
                         document.getElementById('gps-val').innerText = pos.coords.latitude.toFixed(5) + ", " + pos.coords.longitude.toFixed(5);
                     });
                 }
 
-                // 2. Microphone (SPL dBA)
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                     document.getElementById('webcam').srcObject = stream;
@@ -275,7 +272,6 @@ with tab_field:
                     document.getElementById('status').innerText = "Erreur accès Micro/Caméra : " + e.message;
                 }
 
-                // 3. Accéléromètre (Vibrations)
                 if (window.DeviceMotionEvent) {
                     window.addEventListener('devicemotion', (event) => {
                         let acc = event.accelerationIncludingGravity;
@@ -296,7 +292,7 @@ with tab_field:
         with st.form("field_data_form"):
             manual_gps_lat = st.number_input("Latitude Réelle GPS :", value=st.session_state.current_lat, format="%.5f")
             manual_gps_lng = st.number_input("Longitude Réelle GPS :", value=st.session_state.current_lng, format="%.5f")
-            manual_db = st.slider("Bruit Rélevé au Micro (dBA) :", 40, 130, 92)
+            manual_db = st.slider("Bruit Relevé au Micro (dBA) :", 40, 130, 92)
             manual_accel = st.number_input("Vibration Mesurée (m/s²) :", value=4.5, step=0.1)
             
             enable_field = st.checkbox("Activer le Mode Terrain & verrouiller le rapport", value=st.session_state.field_mode_active)
@@ -315,11 +311,11 @@ with tab_field:
                 st.rerun()
 
 # ------------------------------------------------------------------------------
-# TAB 1 : MAP
+# TAB 1 : MAP (OPTIMISÉE HD POUR DELL LATITUDE 5440)
 # ------------------------------------------------------------------------------
 with tab_map:
-    st.subheader("📍 Extractor Acoustique Satellite HD (Google Hybrid)")
-    col_map_left, col_map_right = st.columns([3, 1])
+    st.subheader("📍 Extractor Acoustique Satellite Ultra-HD (Google Hybrid High-Res)")
+    col_map_left, col_map_right = st.columns([3.5, 1])
 
     with col_map_right:
         st.write("**Hotspots Prédéfinis**")
@@ -339,18 +335,24 @@ with tab_map:
         )
 
     with col_map_left:
+        # Configuration haute précision pour l'écran Full HD du Dell Latitude 5440
         m = folium.Map(
             location=[active_lat, active_lng],
-            zoom_start=15,
-            max_zoom=20,
-            tiles=None
+            zoom_start=18,
+            max_zoom=22,
+            tiles=None,
+            prefer_canvas=True
         )
+        
+        # Ingestion des tuiles Google Hybrid HD avec résolution Retina/x2 (512px) et zoom maximal (22)
         folium.TileLayer(
-            tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-            attr='Google Satellite Hybrid',
-            name='Google Satellite',
-            max_zoom=20,
-            max_native_zoom=19,
+            tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&scale=2',
+            attr='Google Satellite Hybrid HD',
+            name='Google Satellite Ultra-HD',
+            max_zoom=22,
+            max_native_zoom=20,
+            tile_size=512,
+            zoom_offset=-1,
             detect_retina=True
         ).add_to(m)
 
@@ -367,7 +369,7 @@ with tab_map:
             icon=folium.Icon(color="green", icon="crosshairs", prefix="fa")
         ).add_to(m)
 
-        map_data = st_folium(m, width=900, height=480, key="satellite_map")
+        map_data = st_folium(m, use_container_width=True, height=650, key="satellite_map")
 
         if map_data and map_data.get("last_clicked") and not st.session_state.field_mode_active:
             c_lat = map_data["last_clicked"]["lat"]
@@ -512,7 +514,7 @@ with tab_roi:
 
     fig_van = go.Figure()
     fig_van.add_trace(go.Bar(x=[f"An {i}" for i in range(11)], y=cum_cash_flows, marker_color=['red' if x < 0 else 'green' for x in cum_cash_flows]))
-    fig_van.update_layout(title="Flux de Trésorerie Cumulés Actualisés (FCFA)", yaxis_title="Valeur Net (FCFA)", template="plotly_white")
+    fig_van.update_layout(title="Flux de Trésorerie Cumulés Actualisés (FCFA)", yaxis_title="Valeur Nette (FCFA)", template="plotly_white")
     st.plotly_chart(fig_van, use_container_width=True)
 
 # ------------------------------------------------------------------------------
