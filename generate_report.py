@@ -1,147 +1,243 @@
-from docx import Document
+import docx
 from docx.shared import Inches, Pt, RGBColor
-from datetime import datetime
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml import parse_xml, OxmlElement
+from docx.oxml.ns import nsdecls, qn
+import datetime
+
+def set_cell_background(cell, fill_hex):
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_hex}"/>')
+    tcPr.append(shd)
+
+def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
+    tcPr = cell._tc.get_or_add_tcPr()
+    tcMar = OxmlElement('w:tcMar')
+    for m, val in [('top', top), ('bottom', bottom), ('left', left), ('right', right)]:
+        node = OxmlElement(f'w:{m}')
+        node.set(qn('w:w'), str(val))
+        node.set(qn('w:type'), 'dxa')
+        tcMar.append(node)
+    tcPr.append(tcMar)
 
 def build_docx_report(admin_data, acoustic_data, piezo_data, financial_data, status_text):
-    doc = Document()
+    doc = docx.Document()
 
-    # Titre principal
-    title = doc.add_heading("NOISE LIGHT Pro — Certification & Audit Piézoélectrique Global", level=0)
-    title.runs[0].font.color.rgb = RGBColor(13, 110, 253)
+    # Configuration des marges
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(0.8)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+
+    # --------------------------------------------------------------------------
+    # EN-TÊTE DU RAPPORT
+    # --------------------------------------------------------------------------
+    title_p = doc.add_paragraph()
+    title_run = title_p.add_run("⚡ RAPPORT D'AUDIT TECHNIQUE & OPTIMISATION PIÉZOÉLECTRIQUE")
+    title_run.font.name = 'Calibri'
+    title_run.font.size = Pt(18)
+    title_run.font.bold = True
+    title_run.font.color.rgb = RGBColor(13, 110, 253)
+
+    sub_p = doc.add_paragraph()
+    sub_run = sub_p.add_run("Plateforme NOISE LIGHT Pro — Dimensionnement et Mesures Physique")
+    sub_run.font.name = 'Calibri'
+    sub_run.font.size = Pt(11)
+    sub_run.font.italic = True
+    sub_run.font.color.rgb = RGBColor(100, 100, 100)
+
+    # Avertissement Mode Terrain si actif
+    if admin_data.get("is_field_mode"):
+        field_p = doc.add_paragraph()
+        field_run = field_p.add_run("🔴 CERTIFICATION DE MESURE SUR TERRAIN EN DIRECT (CAPTEURS HARDWARE)")
+        field_run.font.bold = True
+        field_run.font.color.rgb = RGBColor(220, 53, 69)
+
+    doc.add_paragraph("―" * 55)
+
+    # --------------------------------------------------------------------------
+    # TABLEAU DES MÉTADONNÉES ADMINISTRATIVES
+    # --------------------------------------------------------------------------
+    doc.add_heading("1. Métadonnées du Projet", level=2)
+    t_admin = doc.add_table(rows=4, cols=2)
+    t_admin.alignment = WD_TABLE_ALIGNMENT.CENTER
     
-    doc.add_paragraph(f"Date de l'Audit : {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}")
-    doc.add_paragraph("--------------------------------------------------------------------------------")
+    admin_rows = [
+        ("Nom du Client / Site :", str(admin_data.get("client_name"))),
+        ("Référence Projet :", str(admin_data.get("project_id"))),
+        ("Auditeur / Expert :", str(admin_data.get("auditor_name"))),
+        ("Date & Heure d'Audit :", datetime.datetime.now().strftime("%d/%m/%Y à %H:%M"))
+    ]
+    
+    for i, (label, val) in enumerate(admin_rows):
+        row = t_admin.rows[i]
+        c0, c1 = row.cells[0], row.cells[1]
+        c0.paragraphs[0].add_run(label).bold = True
+        c1.paragraphs[0].add_run(val)
+        set_cell_background(c0, "F8F9FA")
+        set_cell_margins(c0, 80, 80, 120, 120)
+        set_cell_margins(c1, 80, 80, 120, 120)
 
-    # 1. Cadre Administratif
-    doc.add_heading("1. Informations Administratives & Périmètre", level=1)
-    p_admin = doc.add_paragraph()
-    p_admin.add_run("• Organisme / Client : ").bold = True
-    p_admin.add_run(f"{admin_data.get('client_name', 'N/A')}\n")
-    p_admin.add_run("• Code Projet : ").bold = True
-    p_admin.add_run(f"{admin_data.get('project_id', 'N/A')}\n")
-    p_admin.add_run("• Expert Auditeur : ").bold = True
-    p_admin.add_run(f"{admin_data.get('auditor_name', 'N/A')}\n")
-    p_admin.add_run("• Site d'Analyse : ").bold = True
-    p_admin.add_run(f"{admin_data.get('site_desc', 'N/A')}\n")
-    p_admin.add_run("• Positionnement GPS : ").bold = True
-    p_admin.add_run(f"Lat {acoustic_data.get('lat', 0.0):.5f}, Lng {acoustic_data.get('lng', 0.0):.5f}")
+    # --------------------------------------------------------------------------
+    # DIAGNOSTIC AUTOMATIQUE
+    # --------------------------------------------------------------------------
+    doc.add_heading("2. Synthèse du Diagnostic", level=2)
+    diag_p = doc.add_paragraph()
+    diag_run = diag_p.add_run(f"Résultat de l'analyse : {status_text}")
+    diag_run.font.bold = True
+    diag_run.font.color.rgb = RGBColor(220, 53, 69) if "ANOMALIE" in status_text else RGBColor(25, 135, 84)
 
-    # 2. Paramètres Physiques et Électroniques
-    doc.add_heading("2. Configuration Technique & Métrologie Acoustique", level=1)
-    p_phys = doc.add_paragraph()
-    p_phys.add_run("• Niveau Sonore : ").bold = True
-    p_phys.add_run(f"{acoustic_data.get('db')} dBA\n")
-    p_phys.add_run("• Fréquence Dominante (FFT) : ").bold = True
-    p_phys.add_run(f"{acoustic_data.get('freq')} Hz\n")
-    p_phys.add_run("• Surface Déployée : ").bold = True
-    p_phys.add_run(f"{acoustic_data.get('surface')} m²\n")
-    p_phys.add_run("• Matériau Sélectionné : ").bold = True
-    p_phys.add_run(f"{piezo_data.get('material_name')}\n")
-    p_phys.add_run("• Coefficient d33 : ").bold = True
-    p_phys.add_run(f"{piezo_data.get('d33')} pC/N | ")
-    p_phys.add_run("Rendement (η) : ").bold = True
-    p_phys.add_run(f"{piezo_data.get('eta')*100:.1f} %")
+    # --------------------------------------------------------------------------
+    # TABLEAU DES PERFORMANCES TECHNIQUES & METRIQUES
+    # --------------------------------------------------------------------------
+    doc.add_heading("3. Relevés & Modélisation Multiphysique", level=2)
+    t_tech = doc.add_table(rows=7 if admin_data.get("is_field_mode") else 6, cols=3)
+    t_tech.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    # 3. Métriques Énergétiques, Financières et ESG
-    doc.add_heading("3. Bilans Énergétique, CAPEX/OPEX & Impact ESG", level=1)
-    p_e = doc.add_paragraph()
-    p_e.add_run("• Puissance Électrique Utile : ").bold = True
-    p_e.add_run(f"{financial_data.get('p_mw'):.2f} mW\n")
-    p_e.add_run("• Production Journalière : ").bold = True
-    p_e.add_run(f"{financial_data.get('e_wh_day'):.2f} Wh/jour\n")
-    p_e.add_run("• Économies Électriques Mensuelles : ").bold = True
-    p_e.add_run(f"{financial_data.get('savings_fcfa'):,.0f} FCFA / mois\n".replace(",", " "))
-    p_e.add_run("• CAPEX d'Installation Estimé : ").bold = True
-    p_e.add_run(f"{financial_data.get('capex', 0):,.0f} FCFA\n".replace(",", " "))
-    p_e.add_run("• Temps de Retour sur Investissement (ROI) : ").bold = True
-    p_e.add_run(f"{financial_data.get('roi', 0):.1f} mois\n")
-    p_e.add_run("• Déduction Carbone Certifiée : ").bold = True
-    p_e.add_run(f"{financial_data.get('co2_kg'):.2f} kg CO2 / mois")
+    headers = ["Paramètre", "Valeur Mesurée / Simulée", "Source de Donnée"]
+    for j, h in enumerate(headers):
+        cell = t_tech.rows[0].cells[j]
+        r = cell.paragraphs[0].add_run(h)
+        r.bold = True
+        r.font.color.rgb = RGBColor(255, 255, 255)
+        set_cell_background(cell, "0D6EFD")
+        set_cell_margins(cell, 100, 100, 150, 150)
 
-    # 4. Diagnostic Opérationnel
-    doc.add_heading("4. Diagnostic & Alertes de Maintenance", level=1)
-    p_m = doc.add_paragraph()
-    p_m.add_run("Statut Système : ").bold = True
-    p_m.add_run(f"{status_text}")
+    source_str = "🔴 Capteurs Terrain (Micro/GPS/Accel)" if admin_data.get("is_field_mode") else "🌐 Simulation Satellite / Code"
 
-    # Pied de page
-    doc.add_paragraph("\n--------------------------------------------------------------------------------")
-    footer = doc.add_paragraph("Rapport édité par la plateforme d'ingénierie NOISE LIGHT SaaS Pro. Document certifié.")
-    footer.runs[0].font.size = Pt(9)
-    footer.runs[0].font.italic = True
+    tech_rows = [
+        ("Niveau de Pression Acoustique", f"{acoustic_data['db']} dBA", source_str),
+        ("Fréquence Dominante Est.", f"{acoustic_data['freq']} Hz", "FFT Spectrogramme"),
+        ("Localisation GPS", f"Lat {acoustic_data['lat']:.5f}, Lng {acoustic_data['lng']:.5f}", source_str),
+        ("Matériau Piézoélectrique", f"{piezo_data['material_name'].split('(')[0]}", "Bibliothèque Matériaux"),
+        ("Puissance Nette Extraite", f"{financial_data['p_mw']:.2f} mW", "Moteur Phys. NOISE LIGHT")
+    ]
 
-    file_path = "Audit_NOISE_LIGHT_Master.docx"
+    if admin_data.get("is_field_mode"):
+        tech_rows.append(("Accélération Vibratoire", f"{admin_data.get('field_accel'):.2f} m/s²", "🔴 Accéléromètre Terrain"))
+
+    for i, (p_name, p_val, p_src) in enumerate(tech_rows, start=1):
+        row = t_tech.rows[i]
+        row.cells[0].paragraphs[0].add_run(p_name).bold = True
+        row.cells[1].paragraphs[0].add_run(p_val)
+        row.cells[2].paragraphs[0].add_run(p_src)
+        for c in row.cells:
+            set_cell_margins(c, 80, 80, 120, 120)
+            if i % 2 == 0:
+                set_cell_background(c, "F8F9FA")
+
+    # --------------------------------------------------------------------------
+    # BILAN ÉCONOMIQUE & ESG
+    # --------------------------------------------------------------------------
+    doc.add_heading("4. Viabilité Économique et Empreinte Carbone", level=2)
+    doc.add_paragraph(f"• Énergie quotidienne produite : {financial_data['e_wh_day']:.2f} Wh/jour")
+    doc.add_paragraph(f"• Économie financière mensuelle : {financial_data['savings_fcfa']:,.0f} FCFA / mois".replace(",", " "))
+    doc.add_paragraph(f"• Réduction de CO2 estimée : {financial_data['co2_kg']:.2f} kg CO2 / mois")
+    doc.add_paragraph(f"• Investissement CAPEX global : {financial_data['capex']/1e6:.2f} Millions FCFA")
+    doc.add_paragraph(f"• ROI (Retour sur Investissement) : {financial_data['roi']:.1f} mois")
+
+    doc.add_paragraph("\nRapport certifié et généré automatiquement par la plateforme NOISE LIGHT Engine 2026.")
+
+    file_path = f"Rapport_NOISE_LIGHT_{admin_data['project_id']}.docx"
     doc.save(file_path)
     return file_path
 
 
 def build_html_pdf_report(admin_data, acoustic_data, piezo_data, financial_data, status_text):
+    is_field = admin_data.get("is_field_mode", False)
+    
     html_content = f"""
     <!DOCTYPE html>
-    <html>
+    <html lang="fr">
     <head>
-        <meta charset="utf-8">
-        <title>Rapport NOISE LIGHT Pro</title>
+        <meta charset="UTF-8">
+        <title>Audit NOISE LIGHT Pro - {admin_data['project_id']}</title>
         <style>
-            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 30px; color: #333; }}
-            .header {{ border-bottom: 3px solid #0d6efd; padding-bottom: 10px; margin-bottom: 20px; }}
-            .title {{ color: #0d6efd; font-size: 24px; font-weight: bold; }}
-            .section {{ margin-top: 20px; padding: 15px; background: #f8f9fa; border-left: 4px solid #0d6efd; border-radius: 4px; }}
-            .section-title {{ font-size: 16px; font-weight: bold; color: #0d6efd; margin-bottom: 10px; }}
-            .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
-            .label {{ font-weight: bold; }}
-            .footer {{ margin-top: 30px; font-size: 11px; text-align: center; color: #777; border-top: 1px solid #ddd; padding-top: 10px; }}
+            body {{ font-family: 'Segoe UI', Helvetica, Arial, sans-serif; margin: 40px; color: #333; }}
+            .header {{ border-bottom: 3px solid #0d6efd; padding-bottom: 15px; margin-bottom: 25px; }}
+            .header h1 {{ color: #0d6efd; margin: 0; font-size: 24px; }}
+            .header p {{ color: #6c757d; margin: 5px 0 0 0; }}
+            .badge-field {{ background: #dc3545; color: white; padding: 6px 12px; font-weight: bold; border-radius: 4px; display: inline-block; margin-top: 10px; }}
+            .section-title {{ color: #0d6efd; border-left: 4px solid #0d6efd; padding-left: 10px; margin-top: 30px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            th, td {{ border: 1px solid #dee2e6; padding: 10px; text-align: left; }}
+            th {{ background-color: #0d6efd; color: white; }}
+            tr:nth-child(even) {{ background-color: #f8f9fa; }}
+            .status-box {{ padding: 15px; border-radius: 5px; font-weight: bold; margin-top: 20px; }}
+            .status-alert {{ background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }}
+            .status-ok {{ background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }}
+            .kpi-container {{ display: flex; justify-content: space-between; margin-top: 20px; }}
+            .kpi-card {{ background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 5px; text-align: center; width: 30%; }}
+            .kpi-value {{ font-size: 20px; font-weight: bold; color: #0d6efd; margin-top: 5px; }}
+            @media print {{ .no-print {{ display: none; }} }}
         </style>
     </head>
     <body>
+
+        <div class="no-print" style="margin-bottom: 20px;">
+            <button onclick="window.print()" style="background:#0d6efd; color:white; border:none; padding:10px 20px; font-weight:bold; cursor:pointer; border-radius:4px;">
+                🖨️ Imprimer / Sauvegarder en PDF
+            </button>
+        </div>
+
         <div class="header">
-            <div class="title">⚡ NOISE LIGHT Pro — RAPPORT D'INGÉNIERIE & CERTIFICATION</div>
-            <div>Date d'émission : {datetime.now().strftime('%d/%m/%Y %H:%M')}</div>
+            <h1>⚡ AUDIT TECHNIQUE DE RÉCOLTE D'ÉNERGIE PIÉZOÉLECTRIQUE</h1>
+            <p>Plateforme Certifiée NOISE LIGHT Pro — Exportation Métrologique</p>
+            {"<div class='badge-field'>🔴 CERTIFIÉ SUR TERRAIN : DONNÉES HARDWARE RÉELLES</div>" if is_field else ""}
         </div>
 
-        <div class="section">
-            <div class="section-title">1. CADRE ADMINISTRATIF</div>
-            <div class="grid">
-                <div><span class="label">Client :</span> {admin_data.get('client_name')}</div>
-                <div><span class="label">Code Projet :</span> {admin_data.get('project_id')}</div>
-                <div><span class="label">Auditeur :</span> {admin_data.get('auditor_name')}</div>
-                <div><span class="label">GPS :</span> Lat {acoustic_data.get('lat', 0.0):.4f}, Lng {acoustic_data.get('lng', 0.0):.4f}</div>
+        <h3 class="section-title">1. Informations Administratives</h3>
+        <table>
+            <tr><th>Projet</th><td>{admin_data['project_id']}</td><th>Client</th><td>{admin_data['client_name']}</td></tr>
+            <tr><th>Auditeur</th><td>{admin_data['auditor_name']}</td><th>Date</th><td>{datetime.datetime.now().strftime("%d/%m/%Y à %H:%M")}</td></tr>
+        </table>
+
+        <div class="status-box {'status-alert' if 'ANOMALIE' in status_text else 'status-ok'}">
+            Diagnostic Moteur : {status_text}
+        </div>
+
+        <h3 class="section-title">2. Métriques Multiphysiques Capturées</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Indicateur</th>
+                    <th>Valeur</th>
+                    <th>Source d'Origine</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Intensité Acoustique</td><td><b>{acoustic_data['db']} dBA</b></td><td>{"🔴 Microphone physique" if is_field else "Simulation Code"}</td></tr>
+                <tr><td>Fréquence Dominante</td><td><b>{acoustic_data['freq']} Hz</b></td><td>Spectrogramme FFT</td></tr>
+                <tr><td>Coordonnées GPS</td><td>Lat {acoustic_data['lat']:.5f}, Lng {acoustic_data['lng']:.5f}</td><td>{"🔴 GPS WebRTC" if is_field else "Saisie Cartographique"}</td></tr>
+                {"<tr><td>Accélération Vibratoire</td><td><b>" + str(round(admin_data.get('field_accel',0), 2)) + " m/s²</b></td><td>🔴 Accéléromètre matériel</td></tr>" if is_field else ""}
+                <tr><td>Matériau Piézoélectrique</td><td>{piezo_data['material_name']}</td><td>Bibliothèque Matériau</td></tr>
+                <tr><td>Puissance Nette Calculée</td><td><b>{financial_data['p_mw']:.2f} mW</b></td><td>Modèle Physique NOISE LIGHT</td></tr>
+            </tbody>
+        </table>
+
+        <h3 class="section-title">3. Bilan d'Énergie & Rentabilité (ROI)</h3>
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <div>Énergie / Jour</div>
+                <div class="kpi-value">{financial_data['e_wh_day']:.1f} Wh/j</div>
             </div>
-            <div style="margin-top: 8px;"><span class="label">Site :</span> {admin_data.get('site_desc')}</div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">2. MÉTROLOGIE ACOUSTIQUE & COMPOSANTS</div>
-            <div class="grid">
-                <div><span class="label">Niveau Sonore :</span> {acoustic_data.get('db')} dBA</div>
-                <div><span class="label">Fréquence :</span> {acoustic_data.get('freq')} Hz</div>
-                <div><span class="label">Surface Active :</span> {acoustic_data.get('surface')} m²</div>
-                <div><span class="label">Matériau :</span> {piezo_data.get('material_name')}</div>
-                <div><span class="label">Coeff. d33 :</span> {piezo_data.get('d33')} pC/N</div>
-                <div><span class="label">Rendement η :</span> {piezo_data.get('eta')*100:.1f} %</div>
+            <div class="kpi-card">
+                <div>Gains Financiers</div>
+                <div class="kpi-value">{financial_data['savings_fcfa']:,.0f} FCFA/mo</div>
+            </div>
+            <div class="kpi-card">
+                <div>Payback (ROI)</div>
+                <div class="kpi-value">{financial_data['roi']:.1f} mois</div>
             </div>
         </div>
 
-        <div class="section">
-            <div class="section-title">3. PERFORMANCES ÉNERGÉTIQUES, ROBUSTESSE ET ESG</div>
-            <div class="grid">
-                <div><span class="label">Puissance Nette :</span> {financial_data.get('p_mw'):.2f} mW</div>
-                <div><span class="label">Production / Jour :</span> {financial_data.get('e_wh_day'):.2f} Wh/j</div>
-                <div><span class="label">CAPEX Estimé :</span> {financial_data.get('capex', 0):,.0f} FCFA</div>
-                <div><span class="label">Payback ROI :</span> {financial_data.get('roi', 0):.1f} mois</div>
-                <div><span class="label">Économies / Mois :</span> {financial_data.get('savings_fcfa'):,.0f} FCFA</div>
-                <div><span class="label">Réduction CO2 :</span> {financial_data.get('co2_kg'):.2f} kg/mois</div>
-            </div>
-        </div>
+        <p style="margin-top:40px; font-size:12px; color:#888; text-align:center;">
+            Document d'audit généré par NOISE LIGHT Engine 2026 — Certifié conforme pour l'aide à la décision.
+        </p>
 
-        <div class="section">
-            <div class="section-title">4. ÉVALUATION TECHNIQUE</div>
-            <div><span class="label">Diagnostic Système :</span> {status_text}</div>
-        </div>
-
-        <div class="footer">
-            Rapport Certifié NOISE LIGHT Pro. Prêt pour l'impression officielle et la soumission d'audit ESG.
-        </div>
     </body>
     </html>
     """
