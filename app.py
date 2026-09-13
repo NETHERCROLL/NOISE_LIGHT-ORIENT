@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------------------
-# BASE DE DONNÉES MATÉRIAUX MULTI-PHYSIQUES (Propriétés réelles d33, g33, permittivity)
+# BASE DE DONNÉES MATÉRIAUX MULTI-PHYSIQUES (Propriétés réelles d33, g33, permittivité)
 # ------------------------------------------------------------------------------
 MATERIALS_DB = {
     "PZT-5H (Céramique Haute Performance)": {
@@ -205,13 +205,13 @@ with tab5:
     with col_esg1:
         st.markdown(f"""
         - **Méthodologie d'Audit :** ISO 14064-2 / Verra VM0011
-        - **Énergie Substituée :** Réseau électrique fossile conventionnel
+        - **Énergies Substituées :** Réseau électrique fossile conventionnel
         - **Réduction Annuelle d'Émissions :** `{co2_tonnes_an:.3f} Tonnes CO2e`
         - **Valorisation des Crédits Carbone (à {carbon_price_eur} €/t) :** `{carbon_credits_eur:.2f} € / an`
         """)
     with col_esg2:
         fig_carbon = px.pie(
-            names=['Énergies Fossiles Évitées', 'Marge d'Incertitude'],
+            names=["Énergies Fossiles Évitées", "Marge d'Incertitude"],
             values=[95, 5],
             title="Conformité du Bilan Carbone Certified ESG",
             color_discrete_sequence=['#198754', '#6c757d']
